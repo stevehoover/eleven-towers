@@ -10,9 +10,9 @@
    
    var(player0_color, "#d01010")
    var(player1_color, "#d0d010")
-   var(die_size, 7)
-   var(die_stroke_width, 0.15)
-   var(pip_radius, 0.8)
+   var(die_size, 7.2)
+   var(die_stroke_width, 0)
+   var(pip_radius, 0.78)
    
    / Push up to two random players if player_id's are not already defined.
    repeat(2, [
@@ -75,10 +75,11 @@
    
    // -------------------------
    // Game State
-         
+   
    // Which player's turn is it?
    $Player <= $reset                  ? 1'b0 :
               /active_player$end_turn ? ! $Player :
+              /active_player$bust     ? ! $Player :
                                         $RETAIN;
    
    /player[1:0]
@@ -98,9 +99,11 @@
                                          ? 4'b0 :
               // and they did not complete this tower
                                            $RETAIN;
+         // Reached the max (claimed the tower).
+         $maxed = $Height == $max_height;
          
          \viz_js
-            box: {left: -7, width: 14, height: 170, stroke: "green"},
+            box: {left: -7, width: 14, height: 170, strokeWidth: 0},
             init() {
                this.tower_heights = [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2]
                this.top = function (pos) {
@@ -132,14 +135,17 @@
                let player = this.getIndex("player")
                let color = player ? m5_player1_color : m5_player0_color
                for(let i = 0; i <= '$max'.asInt(); i++) {
-                  objs[i].set({fill: ((i == '$max'.asInt()) && (i >= '<<1$Height'.asInt())) ?
-                                          (player ? "transparent" : "#303030") :
-                                     i >= '<<1$Height'.asInt() ?
-                                          (player ? "transparent" : "#707070") :
+                  objs[i].set({fill: i >= '$Height'.asInt()
+                                        ? ('/top$Player'.asInt() == player && i < '/top/active_player/tower[this.getIndex("tower")]$my_next_turn_height'.asInt()
+                                              ? "white" :
+                                           //default
+                                                (player ? "transparent" : (i == '$max'.asInt() ? "#303030" : "#707070"))
+                                          ) :
+                                        // default
                                           color})
                }
                if (player == 0) {
-                  objs.tower_num_top.set({fill: '<<1$Height'.asInt() > '$max'.asInt() ? "transparent" : "white"})
+                  objs.tower_num_top.set({fill: '$Height'.asInt() > '$max'.asInt() ? "transparent" : "white"})
                }
             },
             where: {left: -30, top: 17, width: 60, height: 56, justifyX: "center", justifyY: "top"},
@@ -155,7 +161,6 @@
       \viz_js
          box: {width: 10, height: 10},
          render() {
-            debugger
             let top_context = this.getScope("top").context
             let player_color = '/top$Player'.asBool() ? m5_player1_color : m5_player0_color
             let pip_color = this.getIndex("die") == 0 || '/top/active_player/pairing[(this.getIndex("die") + 2) % 3]$chosen'.asBool() ? "white" : "black"
@@ -172,7 +177,9 @@
    /pairing[2:0]
       /pair[1:0]
          $sum[3:0] = /die[0]$value + /die[1]$value;
+         // Locked-in height.
          $my_height[3:0] = /top/player[/top$Player]/tower[$sum]$Height;
+         // Height for this turn.
          $turn_height[3:0] = /top/active_player/tower[$sum]$TurnHeight;
          $opponent_height[3:0] = /top/player[~ /top$Player]/tower[$sum]$Height;
          $max_height[3:0] = *max\[$sum\] + 1;
@@ -186,11 +193,10 @@
                ]$value;
 
    \viz_js
-      box: {left: -50, top: 0, width: 100, height: 100, fill: "gray"},
+      box: {left: -50, top: 0, width: 100, height: 100, fill: "gray", strokeWidth: 0},
       init() {
          // Create a die.
          this.die = function (die_color, pip_color, value, left, top, scale) {
-            debugger
             pip = function (left, top) {
                return new fabric.Circle(
                   {left, top, radius: m5_pip_radius,
@@ -242,10 +248,10 @@
       $ANY = /top$Player ? /top/player1$ANY : /top/player0$ANY;
       /pairing[2:0]
          \viz_js
-            box: {left: -26, top: -7, width: 52, height: 14},
+            box: {left: -26, top: -7, width: 52, height: 14, strokeWidth: 0, rx: 3, ry: 3},
             layout: {left: 0, top: 15},
             renderFill() {
-               return '$chosen'.asBool() ? "#8080B0" : "transparent"
+               return '$chosen'.asBool() ? "#A0A0D0" : "transparent"
             },
             render() {
                return [new fabric.Text('$score16'.asInt().toString(), {
@@ -270,6 +276,7 @@
                             ! /pairing[1]$chosen;
          /pair[1:0]
             \viz_js
+               box: {strokeWidth: 0},
                layout: {left: 25, top: 0},
                where: {left: -22.5, top: -5, width: 45, height: 10},
             $ANY = /top$Player ? /top/player1/pairing/pair$ANY : /top/player0/pairing/pair$ANY;
@@ -277,7 +284,7 @@
             /die[1:0]
                $ANY = /top$Player ? /top/player1/pairing/pair/die$ANY : /top/player0/pairing/pair/die$ANY;
                \viz_js
-                  box: {width: 10, height: 10},
+                  box: {width: 10, height: 10, strokeWidth: 0},
                   layout: "horizontal",
                   render() {
                      let top_context = this.getScope("top").context
@@ -297,22 +304,52 @@
       /tower[12:2]
          //$ANY = /top/player[/top$Player]/tower[#tower]$ANY;
          $max_height[3:0] = *max\[#tower\] + 1;
+         // Blocked if opponent is at max.
+         /other_players_tower
+            $ANY = /top/player[! /top$Player]/tower$ANY;
+         $blocked = /other_players_tower$maxed;
+         // Update height, incrementing +1 for each matching pair,
+         // then capping at max and switching on end turn.
          $delta[3:0] = {3'b0, /active_player/chosen_pair[0]$sum == #tower} +
                        {3'b0, /active_player/chosen_pair[1]$sum == #tower};
-         $plus_delta[3:0] = $TurnHeight + $delta;
+         $height_plus_delta[3:0] = $TurnHeight + $delta;
          $my_next_turn_height[3:0] =
-              $plus_delta >= $max_height
-                     ? $max_height :
-                       $plus_delta;
+              $blocked
+                   ? 4'b0 :
+              $height_plus_delta >= $max_height
+                   ? $max_height :
+                     $height_plus_delta;
+         $height_change = $my_next_turn_height != $TurnHeight;
          $TurnHeight[3:0] <=
-              /top$reset                 ? 4'b0 :
+              /top$reset              ? 4'b0 :
               // If end turn, set height for next player.
-              /active_player$end_turn    ? /top/player[! /top$Player]/tower$Height :
-                                           $my_next_turn_height;
-              
-      //...
-      $bust = 1'b0;
+              /active_player$turn_over ? /top/player[! /top$Player]/tower$Height :
+                                         $my_next_turn_height;
+      
+      // Bust if no tower heights change.
+      $bust = ! | /tower[*]$height_change;
+      $turn_over = $end_turn || $bust;
    
+      \viz_js
+         box: {},
+         template: {
+            action: [
+               "Text", "", {
+                  left: 18, top: 72,
+                  fontSize: 8, fontFamily: "Roboto", fill: "black"
+               }
+            ]
+         },
+         render() {
+            debugger
+            this.getObjects().action.set('$bust'.asBool()
+                                            ? {text: "✖", fill: "red"} :
+                                         '$end_turn'.asBool()
+                                            ? {text: "✓", fill: "green"} :
+                                         //default
+                                              {text: "…", fill: "#101010"})
+         },
+         where: {}
    
    // --------------------
    // VIZ-Only
