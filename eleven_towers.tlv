@@ -8,7 +8,7 @@
    / var(player_id, xxx)
    / thus defining a stack of player_ids.
    
-   define_hier(PLAYER, 3)
+   define_hier(PLAYER, 5)
    
    var(die_size, 7.2)
    var(die_stroke_width, 0)
@@ -20,7 +20,7 @@
    
    / Push random players if player_id's are not already defined.
    repeat(m5_PLAYER_CNT, [
-      if(m5_depth_of(player_id) < 2, [
+      if(m5_depth_of(player_id) < m5_PLAYER_CNT, [
          var(player_id, random)
       ])
    ])
@@ -205,7 +205,7 @@
       box: {left: -50, top: 0, width: 100, height: 100, fill: "gray", strokeWidth: 0},
       init() {
          // Player colors.
-         this.player_color = ["#d01010", "#d0d010", "#10a010", "#1010d0"]
+         this.player_color = ["#d01010", "#d0d010", "#109010", "#1010d0", "#d06010"]
          
          // Create a die.
          this.die = (player, pip_color, value, left, top, scale) => {
@@ -397,7 +397,8 @@
             o.id.set({text: i == 0 ? "m5_get_ago(player_id, 0)" :
                             i == 1 ? "m5_get_ago(player_id, 1)" :
                             i == 2 ? "m5_get_ago(player_id, 2)" :
-                                     "m5_get_ago(player_id, 3)"})
+                            i == 3 ? "m5_get_ago(player_id, 3)" :
+                                     "m5_get_ago(player_id, 4)"})
          },
          where: {left: -25, top: 3, width: 50, height: 8, justifyX: "center", justifyY: "bottom"},
    
