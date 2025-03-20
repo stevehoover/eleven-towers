@@ -8,14 +8,18 @@
    / var(player_id, xxx)
    / thus defining a stack of player_ids.
    
-   var(player0_color, "#d01010")
-   var(player1_color, "#d0d010")
+   define_hier(PLAYER, 3)
+   
    var(die_size, 7.2)
    var(die_stroke_width, 0)
    var(pip_radius, 0.78)
    
-   / Push up to two random players if player_id's are not already defined.
-   repeat(2, [
+   / Macro to get player color from render().
+   / $1: Player index
+   macro(player_color, ['let player_color = this.getScope("top").context.player_color[$1]'])
+   
+   / Push random players if player_id's are not already defined.
+   repeat(m5_PLAYER_CNT, [
       if(m5_depth_of(player_id) < 2, [
          var(player_id, random)
       ])
@@ -77,12 +81,16 @@
    // Game State
    
    // Which player's turn is it?
-   $Player <= $reset                  ? 1'b0 :
-              /active_player$end_turn ? ! $Player :
-              /active_player$bust     ? ! $Player :
-                                        $RETAIN;
+   $next_player[m5_PLAYER_RANGE] =
+        $Player == m5_PLAYER_MAX ? m5_PLAYER_INDEX_HIGH'd0 :
+                                   $Player + m5_PLAYER_INDEX_HIGH'd1;
+   $Player[m5_PLAYER_RANGE] <=
+        $reset                  ? 1'b0 :
+        /active_player$end_turn ||
+        /active_player$bust     ? $next_player :
+                                  $RETAIN;
    
-   /player[1:0]
+   /m5_PLAYER_HIER
       /tower[12:2]
          $max[3:0] = *max\[#tower\];
          $max_height[3:0] = *max\[#tower\] + 1;
@@ -133,16 +141,17 @@
             render() {
                let objs = this.getObjects()
                let player = this.getIndex("player")
-               let color = player ? m5_player1_color : m5_player0_color
+               //-let color = player ? m5_player1_color : m5_player0_color
+               m5_player_color(player)
                for(let i = 0; i <= '$max'.asInt(); i++) {
                   objs[i].set({fill: i >= '$Height'.asInt()
                                         ? ('/top$Player'.asInt() == player && i < '/top/active_player/tower[this.getIndex("tower")]$my_next_turn_height'.asInt()
                                               ? "white" :
                                            //default
-                                                (player ? "transparent" : (i == '$max'.asInt() ? "#303030" : "#707070"))
+                                                (player > 0 ? "transparent" : (i == '$max'.asInt() ? "#303030" : "#707070"))
                                           ) :
                                         // default
-                                          color})
+                                          player_color})
                }
                if (player == 0) {
                   objs.tower_num_top.set({fill: '$Height'.asInt() > '$max'.asInt() ? "transparent" : "white"})
@@ -162,9 +171,8 @@
          box: {width: 10, height: 10},
          render() {
             let top_context = this.getScope("top").context
-            let player_color = '/top$Player'.asBool() ? m5_player1_color : m5_player0_color
             let pip_color = this.getIndex("die") == 0 || '/top/active_player/pairing[(this.getIndex("die") + 2) % 3]$chosen'.asBool() ? "white" : "black"
-            return [top_context.die(player_color, pip_color, '$value'.asInt(), 5, 5, 1)]
+            return [top_context.die('/top$Player'.asInt(), pip_color, '$value'.asInt(), 5, 5, 1)]
          },
          where: {left: -12.5, top: 73, width: 25, height: 10, justifyX: "center", justifyY: "bottom"}
    
@@ -181,10 +189,11 @@
          $my_height[3:0] = /top/player[/top$Player]/tower[$sum]$Height;
          // Height for this turn.
          $turn_height[3:0] = /top/active_player/tower[$sum]$TurnHeight;
-         $opponent_height[3:0] = /top/player[~ /top$Player]/tower[$sum]$Height;
+         // Not for > 2 players
+         //$opponent_height[3:0] = /top/player[~ /top$Player]/tower[$sum]$Height;
          $max_height[3:0] = *max\[$sum\] + 1;
          // These may or may not be used by the players.
-         `BOGUS_USE($my_height $turn_height $opponent_height $max_height)
+         `BOGUS_USE($my_height $turn_height /*$opponent_height*/ $max_height)
          /die[1:0]
             $value[2:0] = /top/die[
                  #pair == 0 ? #pairing * #die + #die \:
@@ -195,8 +204,12 @@
    \viz_js
       box: {left: -50, top: 0, width: 100, height: 100, fill: "gray", strokeWidth: 0},
       init() {
+         // Player colors.
+         this.player_color = ["#d01010", "#d0d010", "#10a010", "#1010d0"]
+         
          // Create a die.
-         this.die = function (die_color, pip_color, value, left, top, scale) {
+         this.die = (player, pip_color, value, left, top, scale) => {
+            debugger
             pip = function (left, top) {
                return new fabric.Circle(
                   {left, top, radius: m5_pip_radius,
@@ -209,7 +222,7 @@
                   {width: m5_die_size + m5_die_stroke_width, height: m5_die_size + m5_die_stroke_width,
                    rx: 0.8, ry: 0.8,
                    originX: "center", originY: "center",
-                   fill: die_color, strokeWidth: m5_die_stroke_width, stroke: "gray",
+                   fill: this.player_color[player], strokeWidth: m5_die_stroke_width, stroke: "gray",
                   }
                 )
                ],
@@ -288,9 +301,8 @@
                   layout: "horizontal",
                   render() {
                      let top_context = this.getScope("top").context
-                     let player_color = '/top$Player'.asBool() ? m5_player1_color : m5_player0_color
                      let pip_color = this.getIndex("pair") ? "black" : "white"
-                     return [top_context.die(player_color, pip_color, '$value'.asInt(), 5, 5, 1)]
+                     return [top_context.die('/top$Player'.asInt(), pip_color, '$value'.asInt(), 5, 5, 1)]
                   },
       $chosen_pairing[1:0] = /active_player/pairing[0]$chosen ? 2'd0 :
                              /active_player/pairing[1]$chosen ? 2'd1 :
@@ -304,10 +316,15 @@
       /tower[12:2]
          //$ANY = /top/player[/top$Player]/tower[#tower]$ANY;
          $max_height[3:0] = *max\[#tower\] + 1;
-         // Blocked if opponent is at max.
-         /other_players_tower
-            $ANY = /top/player[! /top$Player]/tower$ANY;
-         $blocked = /other_players_tower$maxed;
+         // Blocked if any player is at max.
+         // Specifically for 2-player.
+         ///other_players_tower
+         //   $ANY = /top/player[! /top$Player]/tower$ANY;
+         // Determine whether this tower is blocked (any player is maxed).
+         /m5_PLAYER_HIER
+            $maxed = /top/player/tower$maxed;
+         $blocked = | /player[*]$maxed;
+         //-$blocked = /other_players_tower$maxed;
          // Update height, incrementing +1 for each matching pair,
          // then capping at max and switching on end turn.
          $delta[3:0] = {3'b0, /active_player/chosen_pair[0]$sum == #tower} +
@@ -323,7 +340,7 @@
          $TurnHeight[3:0] <=
               /top$reset              ? 4'b0 :
               // If end turn, set height for next player.
-              /active_player$turn_over ? /top/player[! /top$Player]/tower$Height :
+              /active_player$turn_over ? /top/player[/top$Player + m5_PLAYER_INDEX_HIGH'd1]/tower$Height :
                                          $my_next_turn_height;
       
       // Bust if no tower heights change.
@@ -341,7 +358,6 @@
             ]
          },
          render() {
-            debugger
             this.getObjects().action.set('$bust'.asBool()
                                             ? {text: "✖", fill: "red"} :
                                          '$end_turn'.asBool()
@@ -355,7 +371,7 @@
    // VIZ-Only
    
    $win = 1'b0;
-   /header_player[1:0]
+   /header_player[m5_PLAYER_RANGE]
       \viz_js
          box: {width: 100, height: 15, fill: "#a0e0a0"},
          init() {
@@ -375,9 +391,13 @@
             // Can't do this in init() because this.getIndex isn't currently available.
             let o = this.getObjects()
             let i = this.getIndex()
-            o.circle.set({fill: i ? m5_player1_color : m5_player0_color,
-                          stroke: '/top$win'.asBool() && ('/top>>1$Player'.asInt() == this.getIndex()) ? "cyan" : "gray"})
-            o.id.set({text: this.getIndex() ? "m5_get_ago(player_id, 1)" : "m5_player_id"})
+            m5_player_color(i)
+            o.circle.set({fill: player_color,
+                          stroke: '/top$win'.asBool() && ('/top>>1$Player'.asInt() == i) ? "cyan" : "gray"})
+            o.id.set({text: i == 0 ? "m5_get_ago(player_id, 0)" :
+                            i == 1 ? "m5_get_ago(player_id, 1)" :
+                            i == 2 ? "m5_get_ago(player_id, 2)" :
+                                     "m5_get_ago(player_id, 3)"})
          },
          where: {left: -25, top: 3, width: 50, height: 8, justifyX: "center", justifyY: "bottom"},
    
