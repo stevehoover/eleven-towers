@@ -68,9 +68,7 @@
 
 
 \TLV eleven_towers_game()
-   // Reset, delayed by one cycle, so we have an empty board on cycle 0.
-   $real_reset = *reset;
-   $reset = >>1$real_reset;
+   $reset = *reset;
    
    \SV_plus
       logic[3:0] *max[12:2] = {4'd2, 4'd4, 4'd6, 4'd8, 4'd10, 4'd12, 4'd10, 4'd8, 4'd6, 4'd4, 4'd2};
@@ -85,10 +83,9 @@
         $Player == m5_PLAYER_MAX ? m5_PLAYER_INDEX_HIGH'd0 :
                                    $Player + m5_PLAYER_INDEX_HIGH'd1;
    $Player[m5_PLAYER_RANGE] <=
-        $reset                  ? 1'b0 :
-        /active_player$end_turn ||
-        /active_player$bust     ? $next_player :
-                                  $RETAIN;
+        $reset                   ? 1'b0 :
+        /active_player$turn_over ? $next_player :
+                                   $RETAIN;
    
    /m5_PLAYER_HIER
       /tower[12:2]
@@ -141,7 +138,6 @@
             render() {
                let objs = this.getObjects()
                let player = this.getIndex("player")
-               //-let color = player ? m5_player1_color : m5_player0_color
                m5_player_color(player)
                for(let i = 0; i <= '$max'.asInt(); i++) {
                   objs[i].set({fill: i >= '$Height'.asInt()
@@ -159,6 +155,7 @@
             },
             where: {left: -30, top: 17, width: 60, height: 56, justifyX: "center", justifyY: "top"},
       \viz_js
+         box: {strokeWidth: 0},
          layout: {left: 0.9, top: -0.7},
    
    // -------------------------
@@ -168,7 +165,7 @@
    /die[3:0]
       $value[2:0] = $random[31:0] % 6 + 1;
       \viz_js
-         box: {width: 10, height: 10},
+         box: {width: 10, height: 10, strokeWidth: 0},
          render() {
             let top_context = this.getScope("top").context
             let pip_color = this.getIndex("die") == 0 || '/top/active_player/pairing[(this.getIndex("die") + 2) % 3]$chosen'.asBool() ? "white" : "black"
@@ -202,7 +199,7 @@
                ]$value;
 
    \viz_js
-      box: {left: -50, top: 0, width: 100, height: 100, fill: "gray", strokeWidth: 0},
+      box: {left: -50, top: 0, width: 100, height: 100, fill: "#40a070", strokeWidth: 0},
       init() {
          // Player colors.
          this.player_color = ["#d01010", "#d0d010", "#109010", "#1010d0", "#d06010"]
@@ -307,12 +304,11 @@
       $chosen_pairing[1:0] = /active_player/pairing[0]$chosen ? 2'd0 :
                              /active_player/pairing[1]$chosen ? 2'd1 :
                                                                 2'd2;
-      /chosen_pair[1:0]
-         $ANY = /active_player/pairing[/active_player$chosen_pairing]/pair[#chosen_pair]$ANY;
-         `BOGUS_USE($sum)
-      // The number of towers being actively built (up to 3).
-      $NumBuilding[1:0] <= /top$reset ? 4'd0 : 4'd0;
-      `BOGUS_USE($NumBuilding)
+      /chosen_pairing
+         $ANY = /active_player/pairing[/active_player$chosen_pairing]$ANY;
+         /pair[1:0]
+            $ANY = /active_player/pairing[/active_player$chosen_pairing]/pair$ANY;
+            `BOGUS_USE($sum)
       /tower[12:2]
          //$ANY = /top/player[/top$Player]/tower[#tower]$ANY;
          $max_height[3:0] = *max\[#tower\] + 1;
@@ -327,28 +323,56 @@
          //-$blocked = /other_players_tower$maxed;
          // Update height, incrementing +1 for each matching pair,
          // then capping at max and switching on end turn.
-         $delta[3:0] = {3'b0, /active_player/chosen_pair[0]$sum == #tower} +
-                       {3'b0, /active_player/chosen_pair[1]$sum == #tower};
+         /chosen_pair[1:0]
+            $matches = /active_player/chosen_pairing/pair[#chosen_pair]$sum == #tower;
+            $delta[3:0] = {3'b0, $matches};
+            $priority = /active_player/chosen_pairing$priority_pair == #chosen_pair;
+            // This is a priority pair that claims a new tower.
+            $new_priority_tower =   $priority && $matches && ! /tower$blocked && ! /tower$active && /active_player$active_tower_cnt                  != 2'd3;
+            // This pair causes this tower to grow.
+            $grow = $matches && ! /tower$blocked &&
+                    (/tower$active || $new_priority_tower || /active_player$active_tower_cnt_for_low_priority != 2'd3);
+         $new_priority_tower = | /chosen_pair[*]$new_priority_tower;
+         $grow = | /chosen_pair[*]$grow;   // Either pair causes this tower to grow.
+         $delta[3:0] = /chosen_pair[0]$delta +
+                       /chosen_pair[1]$delta;
          $height_plus_delta[3:0] = $TurnHeight + $delta;
          $my_next_turn_height[3:0] =
-              $blocked
-                   ? 4'b0 :
+              //$blocked
+              //     ? 4'b0 :
+              ! $grow
+                   ? $TurnHeight :
               $height_plus_delta >= $max_height
                    ? $max_height :
                      $height_plus_delta;
-         $height_change = $my_next_turn_height != $TurnHeight;
+         $turn_maxed = $my_next_turn_height == $max_height;
+         //$height_change = $my_next_turn_height != $TurnHeight;
          $TurnHeight[3:0] <=
               /top$reset              ? 4'b0 :
               // If end turn, set height for next player.
-              /active_player$turn_over ? /top/player[/top$Player + m5_PLAYER_INDEX_HIGH'd1]/tower$Height :
+              /active_player$turn_over ? /top/player[(/top$Player + m5_PLAYER_INDEX_HIGH'd1) % m5_PLAYER_CNT]/tower<<1$Height :
                                          $my_next_turn_height;
+         $active = $TurnHeight != /top/player[/top$Player]/tower$Height;
+         // number of towers being actively built (max of 3) and at max for this player (max of 4), accumulate from tower 2 upward
+         $active_tower_cnt_accum[1:0] =
+              {1'b0, $active} +
+              (#tower == 2 ? 2'b0 : /tower[#tower == 2 ? 12 \: #tower - 1]$active_tower_cnt_accum);
+         $maxed_tower_cnt_accum[2:0] =
+              {2'b0, $turn_maxed} +
+              (#tower == 2 ? 3'b0 : /tower[#tower == 2 ? 12 \: #tower - 1]$maxed_tower_cnt_accum);
+      $active_tower_cnt[1:0] = /tower[12]$active_tower_cnt_accum;
+      $maxed_tower_cnt[2:0] = /tower[12]$maxed_tower_cnt_accum;
+      $new_priority_tower = | /tower[*]$new_priority_tower;
+      // Active tower count including the current high-priority pair (for consideration by the low-priority pair).
+      $active_tower_cnt_for_low_priority[1:0] = $active_tower_cnt + {1'b0, $new_priority_tower};
+      $win = $maxed_tower_cnt[2:0] >= 3;
       
       // Bust if no tower heights change.
-      $bust = ! | /tower[*]$height_change;
+      $bust = ! | /tower[*]$grow;
       $turn_over = $end_turn || $bust;
    
       \viz_js
-         box: {},
+         box: {strokeWidth: 0},
          template: {
             action: [
                "Text", "", {
@@ -370,10 +394,9 @@
    // --------------------
    // VIZ-Only
    
-   $win = 1'b0;
    /header_player[m5_PLAYER_RANGE]
       \viz_js
-         box: {width: 100, height: 15, fill: "#a0e0a0"},
+         box: {width: 100, height: 15, fill: "#a0e0a0", strokeWidth: 0},
          init() {
             return {
                circle: new fabric.Circle({
@@ -393,7 +416,7 @@
             let i = this.getIndex()
             m5_player_color(i)
             o.circle.set({fill: player_color,
-                          stroke: '/top$win'.asBool() && ('/top>>1$Player'.asInt() == i) ? "cyan" : "gray"})
+                          stroke: '/top/active_player$win'.asBool() && ('/top$Player'.asInt() == i) ? "cyan" : "gray"})
             o.id.set({text: i == 0 ? "m5_get_ago(player_id, 0)" :
                             i == 1 ? "m5_get_ago(player_id, 1)" :
                             i == 2 ? "m5_get_ago(player_id, 2)" :
@@ -405,8 +428,8 @@
    
    
    // Assert these to end simulation (before Makerchip cycle limit).
-   *passed = *cyc_cnt > 80;
-   *failed = 1'b0;
+   *passed = /active_player$win;
+   *failed = *cyc_cnt > 400;
 \SV
    m5_makerchip_module
 \TLV
