@@ -8,11 +8,29 @@
    / var(player_id, xxx)
    / thus defining a stack of player_ids.
    
-   define_hier(PLAYER, 5)
+   define_hier(PLAYER, 2)
    
    var(die_size, 7.2)
    var(die_stroke_width, 0)
    var(pip_radius, 0.78)
+   /Characterize the layout of pieces on the tower.
+   var(3d, 1)  /// Use a 3-D-like layout.
+   var(piece_height, 10)
+   if(m5_3d, [
+      var(piece_width, 10)
+      var(piece_layout_left, (2.5 - 0.2 * m5_PLAYER_CNT))
+      var(tower_separation, (11 + m5_PLAYER_CNT * 1.5))
+      var(piece_layout_top, -1.0)
+      var(tower_left, (m5_tower_separation - m5_piece_width) / 2)
+      var(active_tower_width, m5_piece_width)
+   ], [
+      var(piece_width, m5_calc((2 * m5_PLAYER_CNT + 6) / m5_PLAYER_CNT))
+      var(piece_layout_left, m5_piece_width)
+      var(tower_separation, m5_calc(m5_piece_width * m5_PLAYER_CNT + 4))
+      var(piece_layout_top, 0)
+      var(tower_left, (m5_tower_separation - m5_piece_width * m5_PLAYER_CNT) / 2)
+      var(active_tower_width, m5_calc(m5_piece_width * m5_PLAYER_CNT))
+   ])
    
    / Macro to get player color from render().
    / $1: Player index
@@ -79,7 +97,7 @@
    // Game State
    
    // Which player's turn is it?
-   $next_player[m5_PLAYER_RANGE] =
+   $next_player[m5_PLAYER_INDEX_RANGE] =
         $Player == m5_PLAYER_MAX ? m5_PLAYER_INDEX_HIGH'd0 :
                                    $Player + m5_PLAYER_INDEX_HIGH'd1;
    $Player[m5_PLAYER_RANGE] <=
@@ -87,6 +105,75 @@
         /active_player$turn_over ? $next_player :
                                    $RETAIN;
    
+   /active_player
+      /tower[12:2]
+         \viz_js
+            box: {width: m5_tower_separation, height: 170, strokeWidth: 0},
+            layout: "horizontal",
+            init() {
+               this.tower_heights = [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2]
+               this.top = function (pos) {
+                  return 2 + 12 * (12 - pos)
+               }
+               let ret = {}
+               // Towers.
+               let height = this.tower_heights[this.getIndex() - 2]
+               for(let i = 0; i <= height; i++) {
+                  ret[i] =
+                       new fabric.Rect({left: m5_tower_left, top: this.top(i),
+                                        width: m5_active_tower_width, height: m5_piece_height,
+                                        fill: i == height ? "#303030" : "#707070", strokeWidth: 0,
+                                      })
+               }
+               // Tower numbers.
+               let props = {originX: "center", originY: "center", fill: "white", fontSize: 6, fontFamily: "Roboto"}
+               let index_str = this.getIndex().toString()
+               ret.tower_num_circle = new fabric.Circle({radius: 6, left: m5_tower_separation / 2, top: this.top(-1) + m5_piece_height / 2,
+                                                         originX: "center", originY: "center", fill: "transparent"})
+               ret.tower_num_bottom = new fabric.Text(index_str, {left: m5_tower_separation / 2, top: this.top(-1) + m5_piece_height / 2, ...props})
+               ret.tower_num_top = new fabric.Text(index_str, {left: m5_tower_separation / 2, top: this.top(height) + m5_piece_height / 2, ...props})
+               this.tower_num_top_set = false
+               return ret
+            },
+            render() {
+               let objs = this.getObjects()
+               let player = '/top$Player'.asInt()
+               let owner_color = null   // color of the owner of this tower or null
+               if (! m5_3d) {
+                  for(let player = 0; player < m5_PLAYER_CNT; player++) {
+                     if ('/top/player[player]/tower[this.getIndex("tower")]$maxed'.asBool()) {
+                        m5_player_color(player)
+                        owner_color = player_color
+                     }
+                  }
+               }
+               for(let i = 0; i <= '$max'.asInt(); i++) {
+                  objs[i].set({fill: owner_color === null // i >= '$Height'.asInt()
+                                        ? //(i < '$my_next_turn_height'.asInt()
+                                          //    ? "white" :
+                                           //default
+                                                (i == '$max'.asInt() ? ('$becomes_active'.asBool() ? "#a0a0a0" : "#303030") : "#707070")
+                                          /*)*/ :
+                                        // default
+                                          owner_color})
+               }
+               // No top number of tower has an owner.
+               objs.tower_num_top.set({fill: owner_color !== null ? "transparent" : "white"})
+               // Circle the pair numbers.
+               let pair0_matches = '/chosen_pair[0]$matches'.asBool()
+               let pair1_matches = '/chosen_pair[1]$matches'.asBool()
+               let both_match = pair0_matches && pair1_matches
+               let color = both_match    ? "#808080A0" :
+                           pair0_matches ? "#FFFFFF60" :
+                           pair1_matches ? "#00000060" :
+                                           "transparent"
+               objs.tower_num_circle.set({fill: color})
+            },
+            where: {left: -m5_tower_separation * 5.5, top: 0},
+      \viz_js
+         box: {left: -105, top: 0, width: 210, height: 170, strokeWidth: 0},
+         where: {left: -40, top: 17, width: 80, height: 56, justifyX: "center", justifyY: "top"},
+            
    /m5_PLAYER_HIER
       /tower[12:2]
          $max[3:0] = *max\[#tower\];
@@ -108,11 +195,12 @@
          $maxed = $Height == $max_height;
          
          \viz_js
-            box: {left: -7, width: 14, height: 170, strokeWidth: 0},
+            box: {width: m5_tower_separation, height: 170, strokeWidth: 0},
+            layout: "horizontal",
             init() {
                this.tower_heights = [2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 2]
                this.top = function (pos) {
-                  return 7 + 12 * (12 - pos)
+                  return 2 + 12 * (12 - pos)
                }
                let ret = {}
                // Towers.
@@ -120,18 +208,10 @@
                let player = this.getIndex("player")
                for(let i = 0; i <= height; i++) {
                   ret[i] =
-                       new fabric.Rect({left: 0, top: this.top(i), originX: "center", originY: "center",
-                                        width: 10, height: 10,
-                                        fill: player ? "transparent" : "#707070", strokeWidth: 0,
+                       new fabric.Rect({left: m5_tower_left + m5_piece_layout_left * player, top: this.top(i) + m5_piece_layout_top * player,
+                                        width: m5_piece_width, height: m5_piece_height,
+                                        fill: "transparent", strokeWidth: 0,
                                       })
-               }
-               // Tower numbers.
-               if (player == 0) {
-                  let props = {left: 0, originX: "center", originY: "center", fill: "white", fontSize: 6, fontFamily: "Roboto"}
-                  let index_str = this.getIndex().toString()
-                  ret.tower_num_bottom = new fabric.Text(index_str, {top: this.top(-1), ...props})
-                  ret.tower_num_top = new fabric.Text(index_str, {top: this.top(height), ...props})
-                  this.tower_num_top_set = false
                }
                return ret
             },
@@ -144,7 +224,7 @@
                                         ? ('/top$Player'.asInt() == player && i < '/top/active_player/tower[this.getIndex("tower")]$my_next_turn_height'.asInt()
                                               ? "white" :
                                            //default
-                                                (player > 0 ? "transparent" : (i == '$max'.asInt() ? "#303030" : "#707070"))
+                                                "transparent"
                                           ) :
                                         // default
                                           player_color})
@@ -153,10 +233,11 @@
                   objs.tower_num_top.set({fill: '$Height'.asInt() > '$max'.asInt() ? "transparent" : "white"})
                }
             },
-            where: {left: -30, top: 17, width: 60, height: 56, justifyX: "center", justifyY: "top"},
+            where: {left: -m5_tower_separation * 5.5, top: 0},
       \viz_js
-         box: {strokeWidth: 0},
-         layout: {left: 0.9, top: -0.7},
+         box: {left: -105, top: 0, width: 210, height: 170, strokeWidth: 0},
+         where: {left: -40, top: 17, width: 80, height: 56, justifyX: "center", justifyY: "top"},
+         layout: {left: 0, top: 0},
    
    // -------------------------
    // Dice
@@ -310,7 +391,7 @@
             $ANY = /active_player/pairing[/active_player$chosen_pairing]/pair$ANY;
             `BOGUS_USE($sum)
       /tower[12:2]
-         //$ANY = /top/player[/top$Player]/tower[#tower]$ANY;
+         $ANY = /top/player[/top$Player]/tower$ANY;
          $max_height[3:0] = *max\[#tower\] + 1;
          // Blocked if any player is at max.
          // Specifically for 2-player.
@@ -352,7 +433,8 @@
               // If end turn, set height for next player.
               /active_player$turn_over ? /top/player[(/top$Player + m5_PLAYER_INDEX_HIGH'd1) % m5_PLAYER_CNT]/tower<<1$Height :
                                          $my_next_turn_height;
-         $active = $TurnHeight != /top/player[/top$Player]/tower$Height;
+         $active = $TurnHeight != $Height;
+         $becomes_active = $my_next_turn_height != $Height;   // (for VIZ only)
          // number of towers being actively built (max of 3) and at max for this player (max of 4), accumulate from tower 2 upward
          $active_tower_cnt_accum[1:0] =
               {1'b0, $active} +
