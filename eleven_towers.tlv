@@ -12,6 +12,7 @@
    
    / Provide a library defining a team's control circuit, name, and ID.
    fn(team_raw_tlv, ?TlvFile, {
+      
       / Include submitted TLV URL, reporting an error if it produces text output.
       if_null(m4_include_lib(m5_TlvFile), [
          error(['The following TL-Verilog library produced output text. Ignoring']m5_nl    m5_TlvFile)
@@ -30,9 +31,19 @@
       on_return(increment, ['num_players'])
    })
 
+   // Output a list of player color hex codes, using the given delimiter.
+   fn(player_colors, Delim, {
+      ~for(Color, ['d01010, d0d010, 109010, 1010d0, d06010'], {
+         ~if(m5_LoopCnt != 0, ['m5_Delim'])
+         ~Color
+      })
+   })
+
+   macro(index_by_player, ['m5_get_ago($1, m5_calc(m5_PLAYER_MAX - $2))'])
+
    / Macro to get player color from render().
    / $1: Player index
-   macro(player_color, ['let player_color = this.getScope("top").context.player_color[$1]'])
+   macro(player_color, ['let player_color = this.getScope("game").context.player_color[$1]'])
 
    macro(DefaultTeamVizBoxAndWhere, ['box: {width: 210, height: 105, left: -55, top: -2.5, strokeWidth: 0}, where: {left: 0, top: 0, width: 80, height: 120},'])
    
@@ -79,99 +90,174 @@
    ])
    
 // --------------- For the Verilog template ---------------
+// 
+// The verilog_wrapper expects a SystemVerilog module with the following interface:
+//
+// module team_<GITHUB_ID> (
+//    input wire clk,
+//    input wire reset,
+//    input wire my_turn,                        // Asserted when it's this player's turn
+//    input wire [2:0] die_value [3:0],          // Values of the 4 rolled dice (1-6)
+//    input wire [3:0] my_height [12:2],         // My locked-in height on each tower
+//    input wire [3:0] turn_height [12:2],       // My current turn height on each tower
+//    input wire [3:0] max_height [12:2],        // Max (goal) height for each tower
+//    input wire [3:0] pairing_sum [2:0][1:0],   // Sum of dice for each pairing's pairs
+//    output wire [15:0] pairing_score [2:0],    // Score for each of 3 pairings (higher is better)
+//    output wire [0:0] priority_pair [2:0],     // Which pair (0 or 1) gets priority for each pairing
+//    output wire end_turn                       // Assert to end turn voluntarily
+// );
+//
+// Notes:
+//   - Towers are indexed [12:2] representing sums 2 through 12
+//   - Pairings are indexed [2:0] representing the 3 ways to pair 4 dice
+//   - Each pairing has 2 pairs [1:0], each containing 2 dice
+//   - Score should be combinational; highest score pairing is chosen
+//   - If my_turn is not asserted, outputs are ignored
 
-\TLV verilog_wrapper(/_top, _github_id)
+\TLV verilog_wrapper(/_player, _player_num, _github_id)
    \SV_plus
       m5_increment(Uniquifier, 1)
-      logic signed [7:0] id['']m5_Uniquifier['']energy [m5_SHIP_RANGE];
-      logic signed [7:0] id['']m5_Uniquifier['']x [m5_SHIP_RANGE];
-      logic signed [7:0] id['']m5_Uniquifier['']y [m5_SHIP_RANGE];
-      logic signed [7:0] id['']m5_Uniquifier['']enemy_x_p [m5_SHIP_RANGE];
-      logic signed [7:0] id['']m5_Uniquifier['']enemy_y_p [m5_SHIP_RANGE];
-      logic signed [3:0] id['']m5_Uniquifier['']x_a [m5_SHIP_RANGE];
-      logic signed [3:0] id['']m5_Uniquifier['']y_a [m5_SHIP_RANGE];
-      logic [1:0] id['']m5_Uniquifier['']fire_dir [m5_SHIP_RANGE];
+      // Input signal arrays
+      logic [2:0] id['']m5_Uniquifier['']die_value [3:0];         // 4 dice values
+      logic [3:0] id['']m5_Uniquifier['']my_height [12:2];        // My locked-in heights for each tower
+      logic [3:0] id['']m5_Uniquifier['']turn_height [12:2];      // My active turn heights for each tower
+      logic [3:0] id['']m5_Uniquifier['']max_height [12:2];       // Max height for each tower
+      logic [3:0] id['']m5_Uniquifier['']pairing_sum [2:0][1:0];  // Sums for each pairing's pairs
+      
+      // Output signal arrays
+      logic [15:0] id['']m5_Uniquifier['']pairing_score [2:0];    // Score for each pairing
+      logic [0:0]  id['']m5_Uniquifier['']priority_pair [2:0];    // Priority pair for each pairing
+      logic        id['']m5_Uniquifier['']end_turn;               // End turn signal
+      
+      // Instantiate the player's SystemVerilog module
       team_['']_github_id team_['']_github_id['_']m5_Uniquifier[''](
          // Inputs:
          .clk(clk),
-         .reset(/_top$reset),
-         .x(id['']m5_Uniquifier['']x),
-         .y(id['']m5_Uniquifier['']y),
-         .energy(id['']m5_Uniquifier['']energy),
-         .destroyed(/ship[*]>>1$destroyed),
-         .enemy_x_p(id['']m5_Uniquifier['']enemy_x_p),
-         .enemy_y_p(id['']m5_Uniquifier['']enemy_y_p),
-         .enemy_cloaked(/enemy_ship[*]$cloaked),
-         .enemy_destroyed(/enemy_ship[*]$destroyed),
+         .reset(/_player$reset),
+         .my_turn(/_player$my_turn),
+         .die_value(id['']m5_Uniquifier['']die_value),
+         .my_height(id['']m5_Uniquifier['']my_height),
+         .turn_height(id['']m5_Uniquifier['']turn_height),
+         .max_height(id['']m5_Uniquifier['']max_height),
+         .pairing_sum(id['']m5_Uniquifier['']pairing_sum),
          // Outputs:
-         .x_a(id['']m5_Uniquifier['']x_a),
-         .y_a(id['']m5_Uniquifier['']y_a),
-         .attempt_fire(/ship[*]$$attempt_fire),
-         .attempt_shield(/ship[*]$$attempt_shield),
-         .attempt_cloak(/ship[*]$$attempt_cloak),
-         .fire_dir(id['']m5_Uniquifier['']fire_dir)
+         .pairing_score(id['']m5_Uniquifier['']pairing_score),
+         .priority_pair(id['']m5_Uniquifier['']priority_pair),
+         .end_turn(id['']m5_Uniquifier['']end_turn)
       );
-   /enemy_ship[*]
+   
+   // Map TLV dice values to SystemVerilog inputs
+   /die[3:0]
       \SV_plus
-         assign *id['']m5_Uniquifier['']enemy_x_p[enemy_ship] = $xx_p;
-         assign *id['']m5_Uniquifier['']enemy_y_p[enemy_ship] = $yy_p;
-   /ship[*]
+         assign *id['']m5_Uniquifier['']die_value[die] = /_top/die[die]$value;
+   
+   // Map TLV tower state to SystemVerilog inputs
+   /tower[12:2]
       \SV_plus
-         assign *id['']m5_Uniquifier['']x[ship] = >>1$xx_p;
-         assign *id['']m5_Uniquifier['']y[ship] = >>1$yy_p;
-         assign *id['']m5_Uniquifier['']energy[ship] = >>1$energy;
-         assign $$xx_acc[3:0] = *id['']m5_Uniquifier['']x_a[ship];
-         assign $$yy_acc[3:0] = *id['']m5_Uniquifier['']y_a[ship];
-         assign $$fire_dir[1:0] = *id['']m5_Uniquifier['']fire_dir[ship];
-      //$xx_acc[3:0] = /_top$xx_acc_vect[4 * (ship + 1) - 1 : 4 * ship];
-      //$yy_acc[3:0] = /_top$yy_acc_vect[4 * (ship + 1) - 1 : 4 * ship];
-      //$fire_dir[1:0] = /_top$fire_dir_vect[2 * (ship + 1) - 1 : 2 * ship];
+         assign *id['']m5_Uniquifier['']my_height[tower] = /_top/player[_player_num]/tower[tower]$Height;
+         assign *id['']m5_Uniquifier['']turn_height[tower] = /_top/active_player/tower[tower]$TurnHeight;
+         assign *id['']m5_Uniquifier['']max_height[tower] = /_top/player[_player_num]/tower[tower]$max_height;
+   
+   // Map TLV pairing sums to SystemVerilog inputs
+   /pairing[2:0]
+      /pair[1:0]
+         \SV_plus
+            assign *id['']m5_Uniquifier['']pairing_sum[pairing][pair] = /_top/pairing[pairing]/pair[pair]$sum;
+   
+   // Map SystemVerilog outputs back to TLV signals
+   /pairing[2:0]
+      \SV_plus
+         assign $score[15:0] = *id['']m5_Uniquifier['']pairing_score[pairing];
+         assign $priority_pair[0:0] = *id['']m5_Uniquifier['']priority_pair[pairing];
+   
+   \SV_plus
+      assign $end_turn = *id['']m5_Uniquifier['']end_turn;
 
 // Reference player logic providing the following interface.
 //
-// The highest score is chosen.
-// Input:
-//   /pairing[2:0]         // 3 possible pairings of the dice
-//      /pair[1:0]            // 2 pairs of dice (for each pairing)
-//         /die[1:0]             // Two dice per pair
-//            $value[2:0]           // Value of die
-//         $sum[3:0]             // Sum of die pair
-//         // Properties of the $sum towers (that this pair would build):
-//         $my_height[3:0]       // Height of my tower
-//         $turn_height[3:0]     // Active height of my tower during the turn
-//         $opponent_height[3:0] // Height of opponent's tower 
-//         $max_height[3:0]      // Max height of towers
+// Args (these are text substituted):
+//   /_top: The top-level game scope, which contains the entire game state.
+//   /_me: This player logic scope (the scope of the /TLV team_* macro)
+//   #player: This player's index (0 for player 1, 1 for player 2, etc.)
+// Globals:
+//   m5_PLAYER_CNT: Number of players in the game
+// Accessible Signals
+//   /_me
+//      // === Pertaining to your roll and corresponding towers ===
+//      $my_turn: Asserted when it's your turn
+//      /pairing[2:0]         // 3 possible pairings of the dice
+//         /pair[1:0]            // 2 pairs of dice (for each pairing)
+//            /die[1:0]             // Two dice per pair
+//               $value[2:0]           // Value of die
+//            $sum[3:0]             // Sum of die pair
+//            // Properties of the $sum tower (that this pair would build):
+//            $my_height[3:0]       // My initial climb height for this tower
+//            $turn_height[3:0]     // My current climb height for this tower during turn
+//            $max_height[3:0]      // Max height of this tower
+//      // === Your State ===
+//      /tower[12:2]
+//         // Valid if you are the active player (/_me$my_turn)
+//         $turn_height[3:0]: The height you have climbed so far this turn on tower t
+//         $active: Whether you have begun climbing this tower already this turn
+//      $active_tower_cnt[1:0]: Number of towers you are currently climbing (max 3)
+//      $maxed_tower_cnt[2:0]: Number of towers you have claimed so far
+//      // === State of all players ===
+//      /player[m5_PLAYER_MAX:0]  // [#player] is yourself
+//         /tower[12:2]
+//            $max[3:0]: The max height of tower t (the goal height to claim it - same for all players)
+//            $height[3:0]: The height that player p has climbed (locked in) on tower t
+//            $maxed: Whether this player has claimed (maxed out) this tower
 // Output:
 //   /pairing[2:0]
-//      $score[?:0] = ...;
+//      $score[?:0] = ...;           // The highest score is chosen.
 //      $priority_pair[0:0] = ...;   // The pair of dice that gets priority if
 //                                   // either, but not both, can start building,
 //                                   // if this pairing is chosen.
-//   $end_turn = ...;
+//   $end_turn = ...;   // Whether to end the turn after this roll (or roll again).
+//
+// Simple example strategies:
 //
 // Random
-\TLV team_random(/_top)
+\TLV team_random(/_top, /_me, #player)
    /pairing[2:0]
       m4_rand($rand, 31, 0, pairing)
       $score[7:0] = $rand % 256;
       $priority_pair[0:0] = 1'b0;
-   m4_rand($end_turn, 0, 0)
-// Choose a pairing with seven if possible. Play 5 times.
-\TLV team_seven(/_top)
+   m4_rand($rand_end_turn, 0, 0)  // [0:0] (vs. boolean)
+   $end_turn = $rand_end_turn;
+//
+// Choose a pairing with seven if possible, or without seven if seven is claimed.
+// Roll 5 times until 7 is claimed, then 3.
+\TLV team_seven(/_top, /_me, #player)
+   // Has any player claimed tower 7?
+   /player[m5_PLAYER_RANGE]
+      $claimed7 = /_top/player[#player]/tower[7]$maxed;
+   $claimed7 = /player[*]$claimed7;
+   // Have I rolled a 7 pairing?
    /pairing[2:0]
       /pair[1:0]
-         $is_seven = $sum == 4'd7;
-      $score[0:0] = /pair[*]$is_seven;
+         $is7 = $sum == 4'd7;
+      $score[0:0] = | /pair[*]$is7 ^ /_me$claimed7;
       $priority_pair[0:0] = 1'b0;
    $PlayCnt[2:0] <= $my_turn ? $PlayCnt + 3'b1 : 3'b0;
-   $end_turn = $PlayCnt > 3'd5;
-   
+   $end_turn = $PlayCnt >= ($claimed7 ? 3'd3 : 3'd5);
+
+
 // Logic shared by /_top/player#
-\TLV player_logic(/_top, _player_num)
-   /player['']_player_num
+\TLV player_logic(/_top, #player_num)
+   /player['']#player_num
       $reset = /_top$reset;
-      $my_turn = _player_num == /_top$Player;
-      `BOGUS_USE($my_turn)
+      $my_turn = #player_num == /_top$Player;
+      ?$my_turn
+         $ANY = /_top/active_player$ANY;
+      /tower[12:2]
+         $my_turn = /player['']#player_num$my_turn;
+         ?$my_turn
+            $ANY = /_top/active_player/tower[#tower]$ANY;
+            $turn_height[3:0] = /_top/active_player/tower[#tower]$TurnHeight;
+            `BOGUS_USE($height $turn_height $active)   // (to make visible in DIAGRAM and avoid no-use warnings)
+      `BOGUS_USE($active_tower_cnt $maxed_tower_cnt $color)   // (to make visible in DIAGRAM)
+      `BOGUS_USE($reset $my_turn)
       /pairing[2:0]
          //$ANY = /_top/pairing$ANY;
          /pair[1:0]
@@ -183,21 +269,30 @@
          /* verilator lint_off width */
          $score16[15:0] = $score;
          /* verilator lint_restore */
-      m5_var(my_github_id, m5_get_ago(github_id, _player_num))
-      m5+call(team_\m5_my_github_id)
+      m5_var(my_github_id, m5_index_by_player(github_id, #player_num))
+      m5+call(team_\m5_my_github_id, /_top, /player['']#player_num, #player_num)
 
 \TLV define_players(/_top)
-   // TODO: We're using fixed indentation here. Need to update tlv_lib to use M5.
-   m5_repeat(m5_num_players, ['m5_nl()         m5+player_logic(/_top, m5_LoopCnt)m5_nl'])
+   m5_if(m5_PLAYER_CNT > 0, ['m5+player_logic(/_top, 0)'])
+   m5_if(m5_PLAYER_CNT > 1, ['m5+player_logic(/_top, 1)'])
+   m5_if(m5_PLAYER_CNT > 2, ['m5+player_logic(/_top, 2)'])
+   m5_if(m5_PLAYER_CNT > 3, ['m5+player_logic(/_top, 3)'])
+   m5_if(m5_PLAYER_CNT > 4, ['m5+player_logic(/_top, 4)'])
+   ///// TODO: We're using fixed indentation here. Need to update tlv_lib to use M5.
+   ///m5_repeat(m5_num_players, ['m5_nl()                  m5+player_logic(/_top, m5_LoopCnt)m5_nl'])
 
 \TLV eleven_towers_game(/_top)
+   |game
+      @1
+         m5+eleven_towers_logic(|game)
+\TLV eleven_towers_logic(/_top)
    m5_configure()
    
    $reset = *reset;
    
    \SV_plus
       logic[3:0] *max[12:2] = {4'd2, 4'd4, 4'd6, 4'd8, 4'd10, 4'd12, 4'd10, 4'd8, 4'd6, 4'd4, 4'd2};
-   
+      logic[23:0] *colors[0:4] = {24'h\m5_player_colors([', 24'h'])};
    
    
    // -------------------------
@@ -207,12 +302,13 @@
    $next_player[m5_PLAYER_INDEX_RANGE] =
         $Player == m5_PLAYER_MAX ? m5_PLAYER_INDEX_HIGH'd0 :
                                    $Player + m5_PLAYER_INDEX_HIGH'd1;
-   $Player[m5_PLAYER_RANGE] <=
+   $Player[m5_PLAYER_INDEX_RANGE] <=
         $reset                   ? 1'b0 :
         /active_player$turn_over ? $next_player :
                                    $RETAIN;
    
    /active_player
+      $color[23:0] = *colors\[/_top$Player\];
       /tower[12:2]
          \viz_js
             box: {width: m5_tower_separation, height: 170, strokeWidth: 0},
@@ -363,6 +459,7 @@
                           ? 4'b0 :
               // and they did not complete this tower
                             $RETAIN;
+         $height[3:0] = $Height;  // Just to avoid the need for users to understand state signals.
          // Reached the max (claimed the tower).
          $maxed = $Height == $max_height;
    
@@ -371,11 +468,15 @@
    
    // Four rolled dice values.
    /die[3:0]
-      $value[2:0] = $random[31:0] % 6 + 1;
+      \SV_plus
+         always_ff @(posedge clk) begin
+            $$rand[31:0] <= \$random;
+         end
+      $value[2:0] = $rand[31:0] % 6 + 1;
       \viz_js
          box: {width: 10, height: 10, strokeWidth: 0},
          render() {
-            let top_context = this.getScope("top").context
+            let top_context = this.getScope("m5_strip_prefix(/_top)").context
             let pip_color = this.getIndex("die") == 0 || '/_top/active_player/pairing[(this.getIndex("die") + 2) % 3]$chosen'.asBool() ? "white" : "black"
             return [top_context.die('/_top$Player'.asInt(), pip_color, '$value'.asInt(), 5, 5, 1)]
          },
@@ -394,11 +495,9 @@
          $my_height[3:0] = /_top/player[/_top$Player]/tower[$sum]$Height;
          // Height for this turn.
          $turn_height[3:0] = /_top/active_player/tower[$sum]$TurnHeight;
-         // Not for > 2 players
-         //$opponent_height[3:0] = /_top/player[~ /_top$Player]/tower[$sum]$Height;
          $max_height[3:0] = *max\[$sum\] + 1;
          // These may or may not be used by the players.
-         `BOGUS_USE($my_height $turn_height /*$opponent_height*/ $max_height)
+         `BOGUS_USE($my_height $turn_height $max_height)
          /die[1:0]
             $value[2:0] = /_top/die[
                  #pair == 0 ? #pairing * #die + #die \:
@@ -410,7 +509,7 @@
       box: {left: -50, top: 0, width: 100, height: 100, fill: "#40a070", strokeWidth: 0},
       init() {
          // Player colors.
-         this.player_color = ["#d01010", "#d0d010", "#109010", "#1010d0", "#d06010"]
+         this.player_color = ["#m5_player_colors(['", "#'])"]
          
          // Create a die.
          this.die = (player, pip_color, value, left, top, scale) => {
@@ -500,7 +599,7 @@
                   box: {width: 10, height: 10, strokeWidth: 0},
                   layout: "horizontal",
                   render() {
-                     let top_context = this.getScope("top").context
+                     let top_context = this.getScope("m5_strip_prefix(/_top)").context
                      let pip_color = this.getIndex("pair") ? "black" : "white"
                      return [top_context.die('/_top$Player'.asInt(), pip_color, '$value'.asInt(), 5, 5, 1)]
                   },
@@ -523,7 +622,6 @@
          /m5_PLAYER_HIER
             $maxed = /_top/player/tower$maxed;
          $blocked = | /player[*]$maxed;
-         //-$blocked = /other_players_tower$maxed;
          // Update height, incrementing +1 for each matching pair,
          // then capping at max and switching on end turn.
          /chosen_pair[1:0]
@@ -621,11 +719,11 @@
             m5_player_color(i)
             o.circle.set({fill: player_color,
                           stroke: '/_top/active_player$win'.asBool() && ('/_top$Player'.asInt() == i) ? "cyan" : "gray"})
-            o.id.set({text: i == 0 ? "m5_get_ago(github_id, 0)" :
-                            i == 1 ? "m5_get_ago(github_id, 1)" :
-                            i == 2 ? "m5_get_ago(github_id, 2)" :
-                            i == 3 ? "m5_get_ago(github_id, 3)" :
-                                     "m5_get_ago(github_id, 4)"})
+            o.id.set({text: i == 0 ? "m5_index_by_player(github_id, 0)" :
+                            i == 1 ? "m5_index_by_player(github_id, 1)" :
+                            i == 2 ? "m5_index_by_player(github_id, 2)" :
+                            i == 3 ? "m5_index_by_player(github_id, 3)" :
+                                     "m5_index_by_player(github_id, 4)"})
          },
          where: {left: -25, top: 3, width: 50, height: 8, justifyX: "center", justifyY: "bottom"},
    
@@ -643,7 +741,7 @@
    // Define players/teams.
    m5_define_player(random, Random 1)
    m5_define_player(random, Random 2)
-   m5_define_player(seven, Seven)
+   m5_define_player(seven, Seven)      // Player 0
    
    // Instantiate the Showdown environment.
    m5+eleven_towers_game(/top)
