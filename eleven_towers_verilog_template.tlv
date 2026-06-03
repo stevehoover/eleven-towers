@@ -111,15 +111,13 @@
 
    var(_SIG_ROOT, path_TBD)  /// Root path for Verilog signals for VIZ.
 
-\SV
-   // Include the Eleven Towers framework.
-   // TODO: Update to a specific SHA in rweda repo after finalizing the framework for the season.
-   m4_include_lib(https://raw.githubusercontent.com/stevehoover/eleven-towers/main/eleven_towers_lib.tlv)
-
-
 // [Optional]
 // Visualization of your logic.
 \TLV team_YOUR_GITHUB_ID_viz(/_top, /_me, #player)
+   /// Define m5_mySigVal() for accessing Verilog signals in your module.
+   /// Called similar to sigVal() but without the need for the Verilog module path and without quotes.
+   /// Example: m5_mySigVal(rolls_this_turn)  // names as seen in WAVEFORM w/ "." as hierarchy separator
+   m5_macro(mySigVal, ['['this.sigVal("team_YOUR_GITHUB_ID_']#player.$']['1['")']'])
    \viz_js
       box: {width: 40, height: 100, strokeWidth: 1},
       where: {left: 50, top: 0, width: 40, height: 100},
@@ -132,21 +130,13 @@
          
          // Access your signals for visualization
          // Note: For Verilog modules, access signals using this.sigVal("team_YOUR_GITHUB_ID.signal_name")
-         const rolls = '$rolls_this_turn'.asInt();
-         
+         const rolls = m5_mySigVal(rolls_this_turn).asInt();
+
          // Return fabric.js objects to display
          return [
-            new fabric.Rect({
-               left: 0, top: 0, width: 100, height: 100,
-               fill: "#f0f0f0", strokeWidth: 0
-            }),
-            new fabric.Text("My Strategy", {
-               left: 50, top: 30, originX: "center",
-               fontSize: 7, fontFamily: "Roboto", fontWeight: "bold"
-            }),
             new fabric.Text(`Roll ${rolls}`, {
-               left: 50, top: 50, originX: "center",
-               fontSize: 6, fontFamily: "Roboto"
+               left: 20, top: 40, originX: "center",
+               fontSize: 8, fontFamily: "Roboto"
             })
          ];
       }
@@ -162,6 +152,12 @@
 // This defines the competition to simulate (for development).
 // When this file is included as a library (for competition), this code is ignored.
 \SV
+   // Include the Eleven Towers framework.
+   // TODO: Update to a specific SHA in rweda repo after finalizing the framework for the season.
+   m4_include_lib(['https://raw.githubusercontent.com/stevehoover/eleven-towers/main/eleven_towers_lib.tlv'])
+   // Include other opponent files (based on eleven_towers_[verilog_]template.tlv) using GitHub raw URLs (similar to eleven_towers_lib.tlv, above).
+   // ...
+
    m5_makerchip_module
 \TLV
    // Enlist players for the game.
@@ -170,12 +166,11 @@
    //   - your GitHub ID (as in your module name, above)
    //   - your player name--anything you like (that isn't crude or disrespectful)
    m5_define_player(YOUR_GITHUB_ID, YOUR_PLAYER_NAME)
-   
    // Choose your opponent(s) (up to you + 4 opponents).
+   // To include code for other opponents, add a `include_lib` above.
    // Note that inactive players must be commented with "///", not "//", to prevent M5 macro evaluation.
    ///m5_define_player(random, Random 1)
    m5_define_player(seven, Seven Strategy)
-   
    // Instantiate the Eleven Towers game.
    m5+eleven_towers_game(/top)
 \SV

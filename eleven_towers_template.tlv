@@ -88,7 +88,7 @@
    // [Optional]
    // Custom visualization for debugging (appears to the right of game board)
    \viz_js
-      box: {width: 100, height: 100, strokeWidth: 1},
+      box: {width: 40, height: 100, strokeWidth: 1},
       where: {left: 50, top: 0, width: 40, height: 100},
       render() {
          // IMPORTANT! Show only during your turn (play nice with other players)
@@ -102,17 +102,9 @@
          
          // Return fabric.js objects to display
          return [
-            new fabric.Rect({
-               left: 0, top: 0, width: 100, height: 100,
-               fill: "#f0f0f0", strokeWidth: 0
-            }),
-            new fabric.Text("My Strategy", {
-               left: 50, top: 30, originX: "center",
-               fontSize: 7, fontFamily: "Roboto", fontWeight: "bold"
-            }),
             new fabric.Text(`Roll ${rolls}`, {
-               left: 50, top: 50, originX: "center",
-               fontSize: 6, fontFamily: "Roboto"
+               left: 20, top: 40, originX: "center",
+               fontSize: 8, fontFamily: "Roboto"
             })
          ];
       }
@@ -124,8 +116,10 @@
 // When this file is included as a library (for competition), this code is ignored.
 \SV
    // Include the Eleven Towers framework.
-   ///m4_include_lib(https://raw.githubusercontent.com/rweda/eleven-towers/main/eleven_towers.tlv)
-   
+   m4_include_lib(https://raw.githubusercontent.com/stevehoover/eleven-towers/main/eleven_towers_lib.tlv)
+   // Include other opponent files (based on eleven_towers_[verilog_]template.tlv) using GitHub raw URLs (similar to eleven_towers_lib.tlv, above).
+   // ...
+
    m5_makerchip_module
 \TLV
    // Enlist players for the game.
@@ -137,6 +131,7 @@
    
    // Choose your opponent(s) (up to you + 4 opponents).
    // "random" and "seven" are example opponents defined in eleven_towers_lib.tlv.
+   // To include code for other opponents, add a `include_lib` above.
    // Note that inactive players must be commented with "///", not "//", to prevent M5 macro evaluation.
    ///m5_define_player(random, Random Player)
    m5_define_player(seven, Seven Strategy)
