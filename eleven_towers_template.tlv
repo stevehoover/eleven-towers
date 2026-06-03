@@ -2,21 +2,21 @@
 \m5
    / A development template for:
    /
-   / /--------------------------------------------------------------------------\
+   / /------------------------------------------------------------------------------\
    / | The Second Annual Makerchip ASIC Design Showdown, Summer 2026, Eleven Towers |
-   / \--------------------------------------------------------------------------/
+   / \------------------------------------------------------------------------------/
+   /
+   / Find details in the repository README.md, and
+   / register at https://www.redwoodeda.com/showdown-info.
    /
    / Each player modifies this template to provide their own custom player
    / control circuitry. This template is for players using TL-Verilog. A Verilog-based
    / template is provided separately. Monitor the Showdown Slack channel for updates.
-   / Use the latest template for submission.
    /
    / Just 3 steps:
-   /   - Replace all YOUR_GITHUB_ID and YOUR_PLAYER_NAME.
-   /   - Code your logic in the module below.
-   /   - Submit by the deadline (TBD).
-   /
-   / Showdown details: https://www.redwoodeda.com/showdown-info and in the repository README.
+   /   - Prepare: Replace all YOUR_GITHUB_ID and YOUR_PLAYER_NAME.
+   /   - Code: Code your logic where identified below.
+   /   - Submit: Submit by the deadline (Mon. July 27, 11 PM IST/1:30 PM EDT), updated to the latest template.
    /
    /
    / Your circuit should drive the following signals:
@@ -55,8 +55,6 @@
    /         $max[3:0]: Max floor of this tower (same for all players).
    /         $floor[3:0]: Locked-in floor for this player.
    /         $claimed: Whether this player has claimed this tower.
-   /
-   / See also the game parameters and interface documentation in `eleven_towers_lib.tlv`.
 
    use(m5-1.0)
 
