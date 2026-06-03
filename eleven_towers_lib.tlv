@@ -116,24 +116,22 @@
 
 \TLV verilog_wrapper(/_top, /_player, _player_num, _github_id)
    \SV_plus
-      m5_increment(Uniquifier, 1)
-      
       // Intermediate unpacked arrays for module connections
-      logic [3:0] id['']_m5_Uniquifier['']tower_start_floor [12:2];
-      logic [3:0] id['']_m5_Uniquifier['']tower_climb_floor [12:2];
-      logic [3:0] id['']_m5_Uniquifier['']tower_height [12:2];
-      logic [3:0] id['']_m5_Uniquifier['']turn_start_tower_floor [12:2];
-      logic id['']_m5_Uniquifier['']tower_climbing [12:2];
-      logic id['']_m5_Uniquifier['']tower_claimed [12:2];
-      logic [3:0] id['']_m5_Uniquifier['']pairing_sum [2:0][1:0];
+      logic [3:0] id['_']_player_num['']tower_start_floor [12:2];
+      logic [3:0] id['_']_player_num['']tower_climb_floor [12:2];
+      logic [3:0] id['_']_player_num['']tower_height [12:2];
+      logic [3:0] id['_']_player_num['']turn_start_tower_floor [12:2];
+      logic id['_']_player_num['']tower_climbing [12:2];
+      logic id['_']_player_num['']tower_claimed [12:2];
+      logic [3:0] id['_']_player_num['']pairing_sum [2:0][1:0];
       
       // Output signal arrays
-      logic [15:0] id['']_m5_Uniquifier['']pairing_score [2:0];    // Score for each pairing
-      logic [0:0]  id['']_m5_Uniquifier['']priority_pair [2:0];    // Priority pair for each pairing
-      logic        id['']_m5_Uniquifier['']end_turn;               // End turn signal
+      logic [15:0] id['_']_player_num['']pairing_score [2:0];    // Score for each pairing
+      logic [0:0]  id['_']_player_num['']priority_pair [2:0];    // Priority pair for each pairing
+      logic        id['_']_player_num['']end_turn;               // End turn signal
       
       // Instantiate the player's SystemVerilog module
-      team_['']_github_id team_['']_github_id['_']m5_Uniquifier[''](
+      team_['']_github_id team_['']_github_id['_']_player_num[''](
          // Inputs:
          .clk(clk),
          .reset(/_player$reset),
@@ -144,41 +142,41 @@
          .my_turn(/_player$my_turn),
          .rolls_this_turn(/_player$rolls_this_turn),
          // My tower state (unpacked arrays)
-         .tower_start_floor(id['']_m5_Uniquifier['']tower_start_floor),
-         .tower_climb_floor(id['']_m5_Uniquifier['']tower_climb_floor),
-         .tower_height(id['']_m5_Uniquifier['']tower_height),
-         .turn_start_tower_floor(id['']_m5_Uniquifier['']turn_start_tower_floor),
-         .tower_climbing(id['']_m5_Uniquifier['']tower_climbing),
-         .tower_claimed(id['']_m5_Uniquifier['']tower_claimed),
+         .tower_start_floor(id['_']_player_num['']tower_start_floor),
+         .tower_climb_floor(id['_']_player_num['']tower_climb_floor),
+         .tower_height(id['_']_player_num['']tower_height),
+         .turn_start_tower_floor(id['_']_player_num['']turn_start_tower_floor),
+         .tower_climbing(id['_']_player_num['']tower_climbing),
+         .tower_claimed(id['_']_player_num['']tower_claimed),
          .climbing_cnt(/_player$climbing_cnt),
          .claimed_cnt(/_player$claimed_cnt),
          // Pairing options (unpacked array)
-         .pairing_sum(id['']_m5_Uniquifier['']pairing_sum),
+         .pairing_sum(id['_']_player_num['']pairing_sum),
          // Outputs:
-         .pairing_score(id['']_m5_Uniquifier['']pairing_score),
-         .priority_pair(id['']_m5_Uniquifier['']priority_pair),
-         .end_turn(id['']_m5_Uniquifier['']end_turn)
+         .pairing_score(id['_']_player_num['']pairing_score),
+         .priority_pair(id['_']_player_num['']priority_pair),
+         .end_turn(id['_']_player_num['']end_turn)
       );
    
    // Connect tower arrays element-by-element
    /tower[12:2]
-      *id['']_m5_Uniquifier['']tower_start_floor\[#tower\] = /_top/player[_player_num]/tower[#tower]$Floor;
-      *id['']_m5_Uniquifier['']tower_climb_floor\[#tower\] = /_top/active_player/tower[#tower]$ClimbFloor;
-      *id['']_m5_Uniquifier['']tower_height\[#tower\] = /_top/active_player/tower[#tower]$tower_height;
-      *id['']_m5_Uniquifier['']turn_start_tower_floor\[#tower\] = /_top/player[_player_num]/tower[#tower]$TurnStartFloor;
-      *id['']_m5_Uniquifier['']tower_climbing\[#tower\] = /_top/active_player/tower[#tower]$climbing;
-      *id['']_m5_Uniquifier['']tower_claimed\[#tower\] = /_top/active_player/tower[#tower]$claimed;
+      *id['_']_player_num['']tower_start_floor\[#tower\] = /_top/player[_player_num]/tower[#tower]$Floor;
+      *id['_']_player_num['']tower_climb_floor\[#tower\] = /_top/active_player/tower[#tower]$ClimbFloor;
+      *id['_']_player_num['']tower_height\[#tower\] = /_top/active_player/tower[#tower]$tower_height;
+      *id['_']_player_num['']turn_start_tower_floor\[#tower\] = /_top/player[_player_num]/tower[#tower]$TurnStartFloor;
+      *id['_']_player_num['']tower_climbing\[#tower\] = /_top/active_player/tower[#tower]$climbing;
+      *id['_']_player_num['']tower_claimed\[#tower\] = /_top/active_player/tower[#tower]$claimed;
    
    // Connect pairing arrays element-by-element
    /pairing[2:0]
       /pair[1:0]
-         *id['']_m5_Uniquifier['']pairing_sum\[#pairing\]\[#pair\] = /_top/pairing[#pairing]/pair[#pair]$sum;
+         *id['_']_player_num['']pairing_sum\[#pairing\]\[#pair\] = /_top/pairing[#pairing]/pair[#pair]$sum;
       
       // Map SystemVerilog outputs back to TLV signals
-      $score[15:0] = *id['']_m5_Uniquifier['']pairing_score\[#pairing\];
-      $priority_pair[0:0] = *id['']_m5_Uniquifier['']priority_pair\[#pairing\];
+      $score[15:0] = *id['_']_player_num['']pairing_score\[#pairing\];
+      $priority_pair[0:0] = *id['_']_player_num['']priority_pair\[#pairing\];
    
-   $end_turn = *id['']_m5_Uniquifier['']end_turn;
+   $end_turn = *id['_']_player_num['']end_turn;
 
 //
 // Simple example opponents:
